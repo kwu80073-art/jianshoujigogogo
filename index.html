@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>iOS 手机模拟器 Studio - 分支剧情版</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- LZ-String URL Hash 压缩库 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'sans-serif'],
+          },
+          colors: {
+            ios: {
+              blue: '#007AFF',
+              green: '#34C759',
+              red: '#FF3B30',
+              yellow: '#FFCC00',
+              grey: '#8E8E93',
+              lightGrey: '#E5E5EA',
+              darkBg: '#000000',
+              cardBg: '#1C1C1E',
+            }
+          },
+          animation: {
+            'bounce-dots': 'bounceDots 1.4s infinite ease-in-out both',
+            'slide-up': 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+          },
+          keyframes: {
+            bounceDots: {
+              '0%, 80%, 100%': { transform: 'scale(0.8)', opacity: '0.3' },
+              '40%': { transform: 'scale(1.2)', opacity: '1' },
+            },
+            slideUp: {
+              '0%': { transform: 'translateY(100%)', opacity: '0' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .ios-glass {
+      background: rgba(30, 30, 30, 0.72);
+      backdrop-filter: blur(25px) saturate(180%);
+      -webkit-backdrop-filter: blur(25px) saturate(180%);
+    }
+
+    .glass-panel {
+      background: rgba(24, 24, 27, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .iphone-frame {
+      box-shadow: 0 0 0 12px #26262a, 0 0 0 13px #121215, 0 30px 70px -15px rgba(0, 0, 0, 0.85);
+    }
+
+    .active-scale:active { transform: scale(0.95); transition: transform 0.1s ease; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans antialiased overflow-x-hidden flex flex-col">
+
+  <!-- TOP APP HEADER (STUDIO MODE ONLY) -->
+  <header id="studio-header" class="h-14 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md px-4 flex items-center justify-between z-30 shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+        <i data-lucide="git-branch" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <h1 class="text-xs font-bold tracking-tight text-white flex items-center gap-2">
+          iOS 模拟器 Studio <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full uppercase font-mono">分支互动版</span>
+        </h1>
+        <p class="text-[10px] text-zinc-400 hidden sm:block">多结局互动剧本 & 饭圈模拟生成器</p>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center space-x-2">
+      <button onclick="toggleViewMode()" id="view-mode-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-all shadow-md">
+        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+        <span id="view-mode-label">切换为纯净展示模式</span>
+      </button>
+
+      <button onclick="toggleAudio()" class="bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200 p-1.5 rounded-lg text-xs" title="切换音效">
+        <i data-lucide="volume-2" id="sound-icon" class="w-4 h-4 text-blue-400"></i>
+      </button>
+
+      <button onclick="exportToShareLink()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 shadow-md shadow-emerald-600/20">
+        <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">导出纯净分享链接</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WRAPPER -->
+  <div id="app-container" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+    <!-- HIDDEN TOGGLE BUTTON IN PRESENTATION MODE -->
+    <button id="hidden-studio-toggle" onclick="toggleViewMode()" class="hidden fixed top-3 right-3 z-50 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white/50 hover:text-white p-2 rounded-full border border-white/10 transition-all active:scale-95 shadow-lg" title="切换 Studio 编辑模式">
+      <i data-lucide="sliders" class="w-4 h-4"></i>
+    </button>
+
+    <!-- LEFT SIDE: iPHONE PREVIEW CANVAS -->
+    <section id="simulator-section" class="flex-1 bg-zinc-950 flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto min-h-0 relative">
+      
+      <!-- Script Timeline Playback Bar (STUDIO MODE ONLY) -->
+      <div id="timeline-bar" class="mb-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-xl z-20 w-full max-w-[380px]">
+        <button id="play-btn" onclick="startTimeline()" class="w-8 h-8 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center transition-transform active:scale-90" title="运行剧情剧本">
+          <i data-lucide="play" class="w-4 h-4 fill-current ml-0.5"></i>
+        </button>
+        <button id="pause-btn" onclick="pauseTimeline()" class="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-400 text-black flex items-center justify-center transition-transform active:scale-90 hidden">
+          <i data-lucide="pause" class="w-4 h-4 fill-current"></i>
+        </button>
+        <button onclick="resetTimeline()" class="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center transition-transform active:scale-90" title="重置剧情">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+
+        <div class="flex-1 flex flex-col justify-center">
+          <div class="flex justify-between items-center text-[10px] text-zinc-400 mb-1 font-medium">
+            <span id="script-status">未运行</span>
+            <span id="script-counter">0 / 0 步</span>
+          </div>
+          <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div id="script-progress" class="h-full bg-blue-500 transition-all duration-300 w-0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- iPHONE DEVICE BODY -->
+      <div id="iphone-body" class="relative w-full h-[750px] max-h-[800px] max-w-[375px] md:max-w-[380px] iphone-frame rounded-[48px] bg-black overflow-hidden flex flex-col justify-between border-4 border-zinc-800 shrink-0 select-none shadow-2xl transition-all duration-300">
+
+        <!-- Top System Bar -->
+        <div class="absolute top-0 left-0 right-0 z-50 px-7 pt-3 pb-1 flex justify-between items-center text-white pointer-events-none">
+          <span class="text-xs font-semibold tracking-tight" id="status-clock">09:41</span>
+
+          <!-- Dynamic Island -->
+          <div class="w-[100px] h-[26px] bg-black rounded-full flex items-center justify-between px-2.5 pointer-events-auto shadow-md">
+            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <div class="w-2.5 h-2.5 rounded-full bg-zinc-900 border border-zinc-700"></div>
+          </div>
+
+          <div class="flex items-center space-x-1.5 text-xs text-white">
+            <i data-lucide="signal" class="w-3.5 h-3.5 fill-current"></i>
+            <span class="text-[10px] font-bold">5G</span>
+            <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+            <div class="w-5 h-2.5 border border-white rounded-sm p-[1px] flex items-center">
+              <div class="h-full w-full bg-white rounded-[1px]"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIMULATOR VIEWPORT CONTAINER -->
+        <div id="viewport" class="relative w-full h-full overflow-hidden bg-black flex flex-col">
+
+          <!-- LOCK SCREEN -->
+          <div id="screen-lock" class="absolute inset-0 z-40 flex flex-col justify-between p-6 pt-16 transition-transform duration-500 ease-in-out bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop');">
+            <div class="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
+
+            <div class="relative z-10 flex flex-col items-center text-white mt-2">
+              <i data-lucide="lock" class="w-4 h-4 mb-1 opacity-80"></i>
+              <p class="text-xs font-medium tracking-wide uppercase text-zinc-200" id="lock-date">10月20日 星期二</p>
+              <h1 class="text-6xl font-bold tracking-tight text-white/90 drop-shadow-md my-1" id="lock-clock">09:41</h1>
+            </div>
+
+            <!-- Lock Notifications List -->
+            <div class="relative z-10 space-y-2 mb-auto mt-6 w-full px-1 max-h-[360px] overflow-y-auto no-scrollbar" id="lock-notifications"></div>
+
+            <div class="relative z-10 flex flex-col items-center pb-4 space-y-3 cursor-pointer" onclick="unlockPhone()">
+              <div class="flex items-center space-x-2 text-[11px] font-medium text-white/80 animate-pulse">
+                <span>轻点或向上轻扫解锁</span>
+                <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- HOME SCREEN -->
+          <div id="screen-home" class="absolute inset-0 z-20 flex flex-col justify-between p-6 pt-16 bg-cover bg-center transition-transform duration-300" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop');">
+            
+            <!-- App Grid -->
+            <div class="grid grid-cols-4 gap-y-6 gap-x-3 pt-4">
+              <!-- Messages App -->
+              <div onclick="openApp('messages')" class="flex flex-col items-center group cursor-pointer active-scale">
+                <div class="relative w-14 h-14 bg-gradient-to-b from-green-400 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <i data-lucide="message-circle" class="w-8 h-8 text-white fill-white"></i>
+                  <span id="badge-messages" class="hidden absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-black">0</span>
+                </div>
+                <span class="text-[10px] text-white mt-1.5 font-medium drop-shadow">信息</span>
+              </div>
+
+              <!-- Photos App -->
+              <div onclick="openApp('photos')" class="flex flex-col items-center group cursor-pointer active-scale">
+                <div class="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+                  <div class="grid grid-cols-2 gap-0.5 p-2">
+                    <div class="w-3.5 h-3.5 rounded-full bg-red-400"></div>
+                    <div class="w-3.5 h-3.5 rounded-full bg-yellow-400"></div>
+                    <div class="w-3.5 h-3.5 rounded-full bg-blue-400"></div>
+                    <div class="w-3.5 h-3.5 rounded-full bg-emerald-400"></div>
+                  </div>
+                </div>
+                <span class="text-[10px] text-white mt-1.5 font-medium drop-shadow">照片</span>
+              </div>
+
+              <!-- Phone App -->
+              <div onclick="openApp('phone')" class="flex flex-col items-center group cursor-pointer active-scale">
+                <div class="w-14 h-14 bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <i data-lucide="phone" class="w-7 h-7 text-white fill-white"></i>
+                  <span id="badge-phone" class="hidden absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-black">1</span>
+                </div>
+                <span class="text-[10px] text-white mt-1.5 font-medium drop-shadow">电话</span>
+              </div>
+
+              <!-- Notes App -->
+              <div onclick="openApp('notes')" class="flex flex-col items-center group cursor-pointer active-scale">
+                <div class="w-14 h-14 bg-amber-100 rounded-2xl flex flex-col justify-between p-2 shadow-lg">
+                  <div class="w-full h-1 bg-amber-300 rounded"></div>
+                  <div class="space-y-1">
+                    <div class="w-full h-0.5 bg-amber-800/40 rounded"></div>
+                    <div class="w-3/4 h-0.5 bg-amber-800/40 rounded"></div>
+                  </div>
+                </div>
+                <span class="text-[10px] text-white mt-1.5 font-medium drop-shadow">备忘录</span>
+              </div>
+            </div>
+
+            <!-- Bottom Dock -->
+            <div class="w-full pb-3">
+              <div class="ios-glass rounded-3xl p-3 flex justify-around items-center border border-white/10">
+                <div onclick="openApp('messages')" class="w-12 h-12 bg-gradient-to-b from-green-400 to-green-600 rounded-xl flex items-center justify-center shadow-md active-scale cursor-pointer">
+                  <i data-lucide="message-circle" class="w-7 h-7 text-white fill-white"></i>
+                </div>
+                <div onclick="openApp('phone')" class="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center shadow-md active-scale cursor-pointer">
+                  <i data-lucide="phone" class="w-7 h-7 text-white fill-white"></i>
+                </div>
+                <div onclick="openApp('photos')" class="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-md active-scale cursor-pointer">
+                  <i data-lucide="image" class="w-7 h-7 text-blue-500"></i>
+                </div>
+                <div onclick="openApp('notes')" class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center shadow-md active-scale cursor-pointer">
+                  <i data-lucide="file-text" class="w-7 h-7 text-amber-700"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- APP 1: MESSAGES APP (INBOX & THREADS) -->
+          <div id="app-messages" class="absolute inset-0 z-30 bg-black translate-y-full transition-transform duration-300 ease-out flex flex-col">
+            
+            <!-- Messages Inbox Header -->
+            <div id="msg-inbox-header" class="pt-11 pb-2 px-4 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between shrink-0">
+              <span class="text-blue-500 text-xs font-medium">编辑</span>
+              <h2 class="text-xs font-bold text-white">信息</h2>
+              <i data-lucide="square-pen" class="w-4 h-4 text-blue-500"></i>
+            </div>
+
+            <!-- Messages Inbox List -->
+            <div id="msg-inbox-list" class="flex-1 overflow-y-auto divide-y divide-zinc-800/60 no-scrollbar">
+              <!-- Contact Chat Thread Cards Render Here -->
+            </div>
+
+            <!-- Active Chat Thread Overlay View -->
+            <div id="msg-chat-view" class="absolute inset-0 bg-black z-10 translate-x-full transition-transform duration-300 ease-out flex flex-col">
+              <div class="pt-11 pb-2 px-3 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between shrink-0">
+                <button onclick="closeChatThread()" class="flex items-center text-blue-500 text-xs font-medium">
+                  <i data-lucide="chevron-left" class="w-4 h-4 -ml-1"></i>
+                  <span id="chat-back-count">信息</span>
+                </button>
+
+                <div class="flex flex-col items-center">
+                  <div id="chat-header-avatar" class="w-6 h-6 rounded-full bg-blue-500 text-white font-bold text-[10px] flex items-center justify-center overflow-hidden bg-cover bg-center">C</div>
+                  <span id="chat-header-name" class="text-[11px] font-semibold text-white">联系人</span>
+                </div>
+
+                <button onclick="triggerCallFromChat()" class="text-blue-500">
+                  <i data-lucide="phone" class="w-4 h-4"></i>
+                </button>
+              </div>
+
+              <div id="chat-messages-box" class="flex-1 overflow-y-auto p-3.5 space-y-3 no-scrollbar bg-black">
+                <div class="text-center my-1">
+                  <span class="text-[9px] text-zinc-500 font-medium uppercase tracking-wider">iMessage • 今天</span>
+                </div>
+                <div id="chat-message-list" class="space-y-3"></div>
+
+                <!-- 正在输入动画 -->
+                <div id="typing-bubble" class="hidden flex items-center space-x-2 max-w-[80%] pt-1">
+                  <div id="typing-avatar" class="w-6 h-6 rounded-full text-white font-bold text-[10px] flex items-center justify-center overflow-hidden shrink-0 bg-cover bg-center">C</div>
+                  <div class="bg-zinc-800 px-3.5 py-2.5 rounded-2xl rounded-bl-sm flex items-center space-x-1">
+                    <div class="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce-dots"></div>
+                    <div class="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce-dots [animation-delay:0.2s]"></div>
+                    <div class="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce-dots [animation-delay:0.4s]"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- BRANCHING CHOICES CONTAINER (第一视角多分支选项浮层) -->
+              <div id="choice-buttons-panel" class="hidden bg-zinc-900/95 border-t border-blue-500/30 p-3 animate-slide-up space-y-2 z-20">
+                <div class="flex items-center justify-between text-[10px] text-blue-400 font-semibold mb-1">
+                  <span class="flex items-center gap-1"><i data-lucide="git-commit" class="w-3 h-3"></i> 请做出第一视角回答选择:</span>
+                </div>
+                <div id="choice-buttons-list" class="space-y-2"></div>
+              </div>
+
+              <!-- Normal Input Bar -->
+              <div id="chat-input-bar" class="p-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center space-x-2 shrink-0 pb-6">
+                <button class="text-zinc-400 hover:text-white p-1">
+                  <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                </button>
+                <div class="flex-1 relative flex items-center">
+                  <input id="user-chat-input" type="text" placeholder="iMessage" class="w-full bg-zinc-800 text-white placeholder-zinc-500 text-xs rounded-full pl-3.5 pr-8 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" onkeydown="if(event.key==='Enter') sendUserInteractiveChat()">
+                  <button onclick="sendUserInteractiveChat()" class="absolute right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center text-white active:scale-90">
+                    <i data-lucide="arrow-up" class="w-3.5 h-3.5 stroke-[2.5]"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- APP 2: PHOTOS APP (照片/相册) -->
+          <div id="app-photos" class="absolute inset-0 z-30 bg-black translate-y-full transition-transform duration-300 ease-out flex flex-col">
+            <div class="pt-11 pb-2 px-4 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between shrink-0">
+              <h2 class="text-xs font-bold text-white">图库</h2>
+              <span class="text-xs text-blue-500 font-medium">选择</span>
+            </div>
+
+            <!-- Photos Grid -->
+            <div id="photos-grid" class="flex-1 overflow-y-auto grid grid-cols-3 gap-0.5 p-0.5 no-scrollbar"></div>
+
+            <!-- Detail Photo Modal Overlay -->
+            <div id="photo-detail-modal" class="absolute inset-0 bg-black z-20 translate-y-full transition-transform duration-300 flex flex-col">
+              <div class="pt-11 pb-2 px-3 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between shrink-0">
+                <button onclick="closePhotoDetail()" class="text-blue-500 text-xs font-medium flex items-center">
+                  <i data-lucide="chevron-left" class="w-4 h-4"></i> 照片
+                </button>
+                <span id="photo-detail-date" class="text-[10px] text-zinc-300">2026-10-19</span>
+                <i data-lucide="heart" id="photo-detail-fav" class="w-4 h-4 text-zinc-400"></i>
+              </div>
+              
+              <div class="flex-1 bg-black flex items-center justify-center p-2 relative overflow-hidden">
+                <img id="photo-detail-img" src="" class="max-w-full max-h-full object-contain rounded-md" />
+              </div>
+
+              <div class="p-3 bg-zinc-900 border-t border-zinc-800 pb-6 text-center">
+                <p id="photo-detail-caption" class="text-xs text-zinc-300 font-medium"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- APP 3: PHONE APP (电话 & 通话记录) -->
+          <div id="app-phone" class="absolute inset-0 z-30 bg-zinc-900 translate-y-full transition-transform duration-300 ease-out flex flex-col text-white">
+            <div class="pt-11 pb-2 px-4 bg-zinc-900/95 border-b border-zinc-800 flex items-center justify-center shrink-0">
+              <h2 class="text-xs font-bold text-white" id="phone-tab-title">最近通话</h2>
+            </div>
+
+            <div id="phone-view-recents" class="flex-1 overflow-y-auto divide-y divide-zinc-800/60 no-scrollbar"></div>
+
+            <div class="p-2 bg-zinc-900 border-t border-zinc-800 flex justify-around items-center text-[10px] text-zinc-400 pb-6">
+              <button onclick="switchPhoneTab('recents')" class="flex flex-col items-center text-blue-500">
+                <i data-lucide="clock" class="w-5 h-5 mb-0.5"></i>
+                <span>最近通话</span>
+              </button>
+              <button onclick="switchPhoneTab('keypad')" class="flex flex-col items-center text-zinc-400 hover:text-white">
+                <i data-lucide="grid" class="w-5 h-5 mb-0.5"></i>
+                <span>拨号盘</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- APP 4: NOTES APP (备忘录) -->
+          <div id="app-notes" class="absolute inset-0 z-30 bg-zinc-950 translate-y-full transition-transform duration-300 ease-out flex flex-col text-white">
+            <div class="pt-11 pb-2 px-4 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
+              <h2 class="text-xs font-bold text-amber-400">备忘录</h2>
+              <i data-lucide="file-plus" class="w-4 h-4 text-amber-400 cursor-pointer" onclick="addNewStudioNote()"></i>
+            </div>
+
+            <div id="notes-list" class="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar"></div>
+          </div>
+
+          <!-- INCOMING/OUTGOING CALL OVERLAY MODAL -->
+          <div id="active-call-modal" class="absolute inset-0 z-50 bg-zinc-950/95 backdrop-blur-xl translate-y-full transition-transform duration-500 flex flex-col justify-between p-8 text-white">
+            <div class="flex flex-col items-center mt-12">
+              <div id="call-avatar" class="w-20 h-20 rounded-full bg-blue-600 text-white font-bold text-2xl flex items-center justify-center mb-3 shadow-xl bg-cover bg-center">C</div>
+              <h2 id="call-name" class="text-xl font-bold">联系人</h2>
+              <p id="call-status-text" class="text-xs text-zinc-400 mt-1">正在呼叫...</p>
+              <p id="call-timer" class="text-sm font-mono text-emerald-400 mt-2 hidden">00:00</p>
+            </div>
+
+            <div class="flex justify-around items-center mb-10 w-full px-6">
+              <button onclick="endSimulatedCall()" class="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center text-white active:scale-90 shadow-lg">
+                <i data-lucide="phone-off" class="w-7 h-7"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- GLOBAL HOME BAR INDICATOR -->
+          <div class="absolute bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/60 rounded-full z-50 cursor-pointer hover:bg-white transition-colors" onclick="goHome()"></div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT SIDE: SCENARIO STUDIO & EDITOR -->
+    <section id="editor-section" class="w-full md:w-[460px] lg:w-[500px] border-t md:border-t-0 md:border-l border-zinc-800 bg-zinc-900/90 flex flex-col h-full overflow-hidden shrink-0">
+      
+      <!-- Studio Tabs Navigation -->
+      <div class="flex border-b border-zinc-800 bg-zinc-900 shrink-0 text-xs font-semibold">
+        <button onclick="switchStudioTab('script')" id="stab-script" class="flex-1 py-3 text-blue-400 border-b-2 border-blue-500 flex items-center justify-center gap-1.5">
+          <i data-lucide="git-branch" class="w-3.5 h-3.5"></i> 剧本分支
+        </button>
+        <button onclick="switchStudioTab('contacts')" id="stab-contacts" class="flex-1 py-3 text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i> 联系人
+        </button>
+        <button onclick="switchStudioTab('photos')" id="stab-photos" class="flex-1 py-3 text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5">
+          <i data-lucide="image" class="w-3.5 h-3.5"></i> 照片相册
+        </button>
+        <button onclick="switchStudioTab('notes')" id="stab-notes" class="flex-1 py-3 text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5">
+          <i data-lucide="file-text" class="w-3.5 h-3.5"></i> 备忘录
+        </button>
+        <button onclick="switchStudioTab('user')" id="stab-user" class="flex-1 py-3 text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5">
+          <i data-lucide="user" class="w-3.5 h-3.5"></i> 个人资料
+        </button>
+      </div>
+
+      <!-- STUDIO TAB 1: SCRIPT TIMELINE & BRANCHING CHOICES EDITOR -->
+      <div id="panel-script" class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-xs font-bold text-zinc-200 uppercase tracking-wider">定时消息与分支互动引擎</h3>
+            <p class="text-[10px] text-zinc-400">可添加定时自动发送消息或“第一视角多分支选项”。</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="addTimelineStep('msg')" class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1">
+              <i data-lucide="plus" class="w-3 h-3"></i> 消息节点
+            </button>
+            <button onclick="addTimelineStep('choice')" class="bg-purple-600 hover:bg-purple-500 text-white text-[11px] px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1 shadow-md shadow-purple-600/20">
+              <i data-lucide="git-merge" class="w-3 h-3"></i> 分支选项
+            </button>
+          </div>
+        </div>
+
+        <div id="timeline-steps-list" class="space-y-3"></div>
+      </div>
+
+      <!-- STUDIO TAB 2: CONTACTS & CHARACTERS -->
+      <div id="panel-contacts" class="hidden flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold text-zinc-200 uppercase tracking-wider">聊天联系人 / 角色设置</h3>
+          <button onclick="addNewContact()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> 新增角色
+          </button>
+        </div>
+
+        <div id="contacts-editor-list" class="space-y-4"></div>
+      </div>
+
+      <!-- STUDIO TAB 3: PHOTOS MANAGER -->
+      <div id="panel-photos" class="hidden flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold text-zinc-200 uppercase tracking-wider">相册图片管理</h3>
+          <button onclick="triggerPhotoUpload()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i> 上传照片文件
+          </button>
+          <input type="file" id="photo-file-input" accept="image/*" class="hidden" onchange="handlePhotoUpload(event)">
+        </div>
+
+        <div id="photos-editor-list" class="space-y-3"></div>
+      </div>
+
+      <!-- STUDIO TAB 4: NOTES MANAGER -->
+      <div id="panel-notes" class="hidden flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold text-zinc-200 uppercase tracking-wider">备忘录编辑器</h3>
+          <button onclick="addNewStudioNote()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> 新增备忘录
+          </button>
+        </div>
+
+        <div id="notes-editor-list" class="space-y-3"></div>
+      </div>
+
+      <!-- STUDIO TAB 5: USER PROFILE & SETTINGS -->
+      <div id="panel-user" class="hidden flex-1 overflow-y-auto p-4 space-y-5 no-scrollbar">
+        <div class="glass-panel p-4 rounded-2xl space-y-3">
+          <h4 class="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-2">第一视角（我）个人资料</h4>
+          
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] text-zinc-400 mb-1">我的名字</label>
+              <input type="text" id="user-profile-name" onchange="updateUserProfile()" class="w-full bg-zinc-800 border border-zinc-700 text-xs rounded-lg p-2 text-white">
+            </div>
+            <div>
+              <label class="block text-[10px] text-zinc-400 mb-1">我的手机号</label>
+              <input type="text" id="user-profile-phone" onchange="updateUserProfile()" class="w-full bg-zinc-800 border border-zinc-700 text-xs rounded-lg p-2 text-white">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-zinc-400 mb-1">我的头像文件上传</label>
+            <input type="file" accept="image/*" onchange="handleUserAvatarUpload(event)" class="text-xs text-zinc-400">
+          </div>
+        </div>
+
+        <div class="glass-panel p-4 rounded-2xl space-y-3">
+          <h4 class="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-2">保存与导出选项</h4>
+          <button onclick="saveToLocalStorage()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 rounded-xl font-medium flex items-center justify-center gap-1.5">
+            <i data-lucide="save" class="w-3.5 h-3.5"></i> 保存剧情到本地浏览器
+          </button>
+          <button onclick="exportToShareLink()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-xl font-medium flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20">
+            <i data-lucide="link" class="w-3.5 h-3.5"></i> 导出纯净版互动剧情分享链接
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- EXPORT LINK MODAL (FALLBACK COPYING) -->
+  <div id="export-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-panel max-w-md w-full p-5 rounded-2xl space-y-4 border border-zinc-700 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="share-2" class="w-4 h-4 text-emerald-400"></i> 导出纯净展示链接
+        </h3>
+        <button onclick="closeExportModal()" class="text-zinc-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-zinc-300">
+        已为你生成纯净展示链接！任何人打开此链接后，将直接进入全屏 iPhone 手机模拟界面，且<strong class="text-emerald-400">只能互动不能修改</strong>：
+      </p>
+
+      <textarea id="export-link-textarea" readonly class="w-full h-24 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-emerald-300 font-mono break-all focus:outline-none focus:ring-1 focus:ring-emerald-500 select-all"></textarea>
+
+      <div class="flex items-center gap-2">
+        <button onclick="copyExportTextarea()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20">
+          <i data-lucide="copy" class="w-4 h-4"></i> 一键复制纯净链接
+        </button>
+        <button onclick="closeExportModal()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-4 py-2.5 rounded-xl font-medium">
+          关闭
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION CODE & BRANCHING STATE ENGINE -->
+  <script>
+    // State Variables
+    let isLocked = true;
+    let isStudioMode = true;
+    let soundEnabled = true;
+    let activeChatContactId = null;
+    let timelineIndex = 0;
+    let timelineTimer = null;
+    let isTimelineRunning = false;
+    let activeCallTimer = null;
+    let callSeconds = 0;
+    let currentWaitingChoice = null;
+
+    // Default Empty Data Store with Support for Branching Choices
+    let appData = {
+      user: {
+        name: '我',
+        phone: '+86 138-0000-0000',
+        avatar: ''
+      },
+      contacts: [
+        {
+          id: 'c1',
+          name: '角色 A',
+          phone: '+86 199-8888-9999',
+          status: '在线',
+          color: '#ec4899',
+          avatar: '',
+          unread: 0,
+          messages: []
+        },
+        {
+          id: 'c2',
+          name: '角色 B',
+          phone: '+86 139-1111-2222',
+          status: '忙碌',
+          color: '#3b82f6',
+          avatar: '',
+          unread: 0,
+          messages: []
+        }
+      ],
+      photos: [
+        { id: 'p1', url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=600&auto=format&fit=crop', date: '2026-10-19 14:30', caption: '活动现场 ✨', fav: true }
+      ],
+      notes: [
+        { id: 'n1', title: '备忘录示例', content: '可以自由在控制台添加编辑备忘录...', date: '2026-10-20' }
+      ],
+      calls: [
+        { id: 'cl1', contactName: '角色 A', type: '呼入', duration: '02:15', timestamp: '昨天' }
+      ],
+      timeline: []
+    };
+
+    // Synthesized iOS Notification Glass Chime Sound
+    function playChimeSound() {
+      if (!soundEnabled) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const now = ctx.currentTime;
+        
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        osc1.frequency.setValueAtTime(1046.50, now);
+        osc1.frequency.setValueAtTime(1318.51, now + 0.08);
+
+        osc2.frequency.setValueAtTime(1567.98, now);
+        osc2.frequency.setValueAtTime(2093.00, now + 0.08);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.5);
+        osc2.stop(now + 0.5);
+      } catch (e) {}
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      const soundIcon = document.getElementById('sound-icon');
+      if (soundEnabled) soundIcon.classList.replace('text-zinc-500', 'text-blue-400');
+      else soundIcon.classList.replace('text-blue-400', 'text-zinc-500');
+    }
+
+    // Initialize App & Check Presentation Mode
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      const hash = window.location.hash;
+      let forcePlayMode = false;
+
+      if (hash.includes('mode=play') || hash.includes('#data=')) {
+        forcePlayMode = true;
+      }
+
+      if (hash.includes('data=')) {
+        try {
+          const match = hash.match(/data=([^&]+)/);
+          if (match && match[1]) {
+            const decompressed = LZString.decompressFromEncodedURIComponent(match[1]);
+            if (decompressed) appData = JSON.parse(decompressed);
+          }
+        } catch (e) { console.error("URL Hash 解压失败", e); }
+      } else {
+        const saved = localStorage.getItem('ios_sim_appdata');
+        if (saved) {
+          try { appData = JSON.parse(saved); } catch (e) {}
+        }
+      }
+
+      renderAllApps();
+      renderStudioPanels();
+
+      if (forcePlayMode) {
+        setPresentationMode(true);
+        // 如果有剧情，自动播放时间轴
+        if (appData.timeline && appData.timeline.length > 0) {
+          setTimeout(() => startTimeline(), 1200);
+        }
+      }
+    });
+
+    function updateClock() {
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      document.getElementById('status-clock').textContent = timeStr;
+      document.getElementById('lock-clock').textContent = timeStr;
+      
+      const options = { month: 'numeric', day: 'numeric', weekday: 'long' };
+      document.getElementById('lock-date').textContent = now.toLocaleDateString('zh-CN', options);
+    }
+
+    function unlockPhone() {
+      document.getElementById('screen-lock').style.transform = 'translateY(-100%)';
+      isLocked = false;
+    }
+
+    function openApp(appId) {
+      if (isLocked) unlockPhone();
+
+      ['messages', 'photos', 'phone', 'notes'].forEach(id => {
+        document.getElementById(`app-${id}`).classList.add('translate-y-full');
+      });
+
+      const target = document.getElementById(`app-${appId}`);
+      if (target) target.classList.remove('translate-y-full');
+
+      if (appId === 'messages') renderMessagesInbox();
+    }
+
+    function goHome() {
+      if (isLocked) unlockPhone();
+      else {
+        ['messages', 'photos', 'phone', 'notes'].forEach(id => {
+          document.getElementById(`app-${id}`).classList.add('translate-y-full');
+        });
+      }
+    }
+
+    function setPresentationMode(enablePurePlay) {
+      isStudioMode = !enablePurePlay;
+      const studioHeader = document.getElementById('studio-header');
+      const editorSection = document.getElementById('editor-section');
+      const timelineBar = document.getElementById('timeline-bar');
+      const viewModeLabel = document.getElementById('view-mode-label');
+      const hiddenToggle = document.getElementById('hidden-studio-toggle');
+
+      if (enablePurePlay) {
+        studioHeader.classList.add('hidden');
+        editorSection.classList.add('hidden');
+        timelineBar.classList.add('hidden');
+        hiddenToggle.classList.remove('hidden');
+      } else {
+        studioHeader.classList.remove('hidden');
+        editorSection.classList.remove('hidden');
+        timelineBar.classList.remove('hidden');
+        hiddenToggle.classList.add('hidden');
+        if (viewModeLabel) viewModeLabel.textContent = "切换为纯净展示模式";
+      }
+    }
+
+    function toggleViewMode() {
+      setPresentationMode(isStudioMode);
+    }
+
+    // MESSAGES APP LOGIC
+    function renderMessagesInbox() {
+      const inbox = document.getElementById('msg-inbox-list');
+      inbox.innerHTML = '';
+      let totalUnread = 0;
+
+      appData.contacts.forEach(c => {
+        totalUnread += (c.unread || 0);
+        const lastMsg = c.messages.length > 0 ? c.messages[c.messages.length - 1].text : '暂无消息';
+        const card = document.createElement('div');
+        card.className = 'p-3 flex items-center space-x-3 hover:bg-zinc-900 cursor-pointer active-scale';
+        card.onclick = () => openChatThread(c.id);
+
+        let avatarContent = c.avatar ? `<img src="${c.avatar}" class="w-full h-full object-cover" />` : (c.name ? c.name[0] : 'C');
+
+        card.innerHTML = `
+          <div class="relative w-11 h-11 rounded-full text-white font-bold text-sm flex items-center justify-center overflow-hidden shrink-0" style="background-color: ${c.color || '#3b82f6'}">
+            ${avatarContent}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-baseline">
+              <h3 class="text-xs font-semibold text-white truncate">${escapeHtml(c.name)}</h3>
+              <span class="text-[9px] text-zinc-500">刚刚</span>
+            </div>
+            <p class="text-xs text-zinc-400 truncate mt-0.5">${escapeHtml(lastMsg)}</p>
+          </div>
+          ${c.unread > 0 ? `<span class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>` : ''}
+        `;
+        inbox.appendChild(card);
+      });
+
+      const badge = document.getElementById('badge-messages');
+      if (totalUnread > 0) {
+        badge.textContent = totalUnread;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function openChatThread(contactId) {
+      activeChatContactId = contactId;
+      const contact = appData.contacts.find(c => c.id === contactId);
+      if (!contact) return;
+
+      contact.unread = 0;
+      renderMessagesInbox();
+
+      document.getElementById('chat-header-name').textContent = contact.name;
+      const avatarContainer = document.getElementById('chat-header-avatar');
+      if (contact.avatar) {
+        avatarContainer.style.backgroundImage = `url('${contact.avatar}')`;
+        avatarContainer.textContent = '';
+      } else {
+        avatarContainer.style.backgroundImage = '';
+        avatarContainer.style.backgroundColor = contact.color || '#3b82f6';
+        avatarContainer.textContent = contact.name[0];
+      }
+
+      renderThreadMessages(contact);
+      document.getElementById('msg-chat-view').classList.remove('translate-x-full');
+
+      // 检查是否有等待中的分支选项
+      if (currentWaitingChoice && currentWaitingChoice.contactId === contactId) {
+        showBranchingChoiceButtons(currentWaitingChoice);
+      }
+    }
+
+    function closeChatThread() {
+      document.getElementById('msg-chat-view').classList.add('translate-x-full');
+      activeChatContactId = null;
+    }
+
+    function renderThreadMessages(contact) {
+      const list = document.getElementById('chat-message-list');
+      list.innerHTML = '';
+
+      contact.messages.forEach(msg => {
+        const wrap = document.createElement('div');
+        if (msg.sender === 'user') {
+          wrap.className = 'flex flex-col items-end';
+          wrap.innerHTML = `<div class="bg-blue-600 text-white text-xs px-3.5 py-2 rounded-2xl rounded-br-sm max-w-[80%]">${escapeHtml(msg.text)}</div>`;
+        } else {
+          wrap.className = 'flex flex-col items-start';
+          let imgHTML = msg.image ? `<img src="${msg.image}" class="rounded-xl my-1 max-w-full max-h-40 object-cover" />` : '';
+          let avatarContent = contact.avatar ? `<img src="${contact.avatar}" class="w-full h-full object-cover" />` : contact.name[0];
+
+          wrap.innerHTML = `
+            <div class="flex items-end space-x-2 max-w-[85%]">
+              <div class="w-6 h-6 rounded-full text-white font-bold text-[10px] flex items-center justify-center shrink-0 overflow-hidden" style="background-color: ${contact.color || '#3b82f6'}">
+                ${avatarContent}
+              </div>
+              <div class="bg-zinc-800 text-white text-xs px-3.5 py-2 rounded-2xl rounded-bl-sm">
+                ${imgHTML}
+                ${escapeHtml(msg.text)}
+              </div>
+            </div>
+          `;
+        }
+        list.appendChild(wrap);
+      });
+
+      const box = document.getElementById('chat-messages-box');
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function sendUserInteractiveChat() {
+      if (!activeChatContactId) return;
+      const input = document.getElementById('user-chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const contact = appData.contacts.find(c => c.id === activeChatContactId);
+      if (contact) {
+        contact.messages.push({ sender: 'user', text, timestamp: '刚刚' });
+        renderThreadMessages(contact);
+        input.value = '';
+      }
+    }
+
+    // SHOW INTERACTIVE BRANCHING CHOICE BUTTONS
+    function showBranchingChoiceButtons(step) {
+      currentWaitingChoice = step;
+      const panel = document.getElementById('choice-buttons-panel');
+      const list = document.getElementById('choice-buttons-list');
+      list.innerHTML = '';
+
+      step.choices.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'w-full bg-blue-600/20 hover:bg-blue-600 border border-blue-500/40 hover:border-blue-500 text-blue-200 hover:text-white text-xs py-2 px-3 rounded-xl font-medium transition-all text-left flex items-center justify-between group active:scale-95';
+        btn.onclick = () => selectBranchingOption(step, opt);
+        btn.innerHTML = `
+          <span>${escapeHtml(opt.label)}</span>
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-60 group-hover:opacity-100"></i>
+        `;
+        list.appendChild(btn);
+      });
+
+      lucide.createIcons();
+      panel.classList.remove('hidden');
+    }
+
+    function hideBranchingChoiceButtons() {
+      document.getElementById('choice-buttons-panel').classList.add('hidden');
+      currentWaitingChoice = null;
+    }
+
+    function selectBranchingOption(step, selectedOption) {
+      hideBranchingChoiceButtons();
+
+      const contact = appData.contacts.find(c => c.id === step.contactId) || appData.contacts[0];
+      if (!contact) return;
+
+      // 1. 发送第一视角选择的答案文本
+      contact.messages.push({ sender: 'user', text: selectedOption.label, timestamp: '刚刚' });
+      renderThreadMessages(contact);
+
+      // 2. 模拟角色“正在输入”动画，随后回复选定剧情内容
+      const typingBubble = document.getElementById('typing-bubble');
+      const typingAvatar = document.getElementById('typing-avatar');
+      if (contact.avatar) typingAvatar.style.backgroundImage = `url('${contact.avatar}')`;
+      else { typingAvatar.style.backgroundImage = ''; typingAvatar.style.backgroundColor = contact.color || '#3b82f6'; typingAvatar.textContent = contact.name[0]; }
+
+      typingBubble.classList.remove('hidden');
+      const box = document.getElementById('chat-messages-box');
+      box.scrollTop = box.scrollHeight;
+
+      setTimeout(() => {
+        typingBubble.classList.add('hidden');
+        playChimeSound();
+        contact.messages.push({ sender: 'contact', text: selectedOption.reply, timestamp: '刚刚' });
+        renderThreadMessages(contact);
+
+        // 继续推进时间轴
+        timelineIndex++;
+        updateTimelineProgress();
+        scheduleNextTimelineStep();
+      }, 1800);
+    }
+
+    // PHOTOS APP LOGIC
+    function renderPhotosGrid() {
+      const grid = document.getElementById('photos-grid');
+      grid.innerHTML = '';
+
+      appData.photos.forEach(photo => {
+        const item = document.createElement('div');
+        item.className = 'aspect-square bg-zinc-800 overflow-hidden cursor-pointer relative group';
+        item.onclick = () => openPhotoDetail(photo);
+        item.innerHTML = `<img src="${photo.url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />`;
+        grid.appendChild(item);
+      });
+    }
+
+    function openPhotoDetail(photo) {
+      document.getElementById('photo-detail-img').src = photo.url;
+      document.getElementById('photo-detail-date').textContent = photo.date;
+      document.getElementById('photo-detail-caption').textContent = photo.caption || '';
+      document.getElementById('photo-detail-modal').classList.remove('translate-y-full');
+    }
+
+    function closePhotoDetail() {
+      document.getElementById('photo-detail-modal').classList.add('translate-y-full');
+    }
+
+    // PHONE APP & CALL LOGS LOGIC
+    function renderCallLogs() {
+      const container = document.getElementById('phone-view-recents');
+      container.innerHTML = '';
+
+      appData.calls.forEach(call => {
+        const row = document.createElement('div');
+        row.className = 'p-3 flex items-center justify-between hover:bg-zinc-800/50 cursor-pointer';
+        let iconColor = call.type === '未接来电' ? 'text-red-500' : 'text-zinc-400';
+
+        row.innerHTML = `
+          <div class="flex items-center space-x-3">
+            <i data-lucide="phone-call" class="w-4 h-4 ${iconColor}"></i>
+            <div>
+              <h4 class="text-xs font-semibold ${call.type === '未接来电' ? 'text-red-500' : 'text-white'}">${escapeHtml(call.contactName)}</h4>
+              <p class="text-[10px] text-zinc-500">${call.type} • ${call.duration}</p>
+            </div>
+          </div>
+          <span class="text-[10px] text-zinc-500">${escapeHtml(call.timestamp)}</span>
+        `;
+        container.appendChild(row);
+      });
+      lucide.createIcons();
+    }
+
+    function triggerCallFromChat() {
+      const contact = appData.contacts.find(c => c.id === activeChatContactId);
+      if (contact) startSimulatedCall(contact.name, contact.avatar, contact.color);
+    }
+
+    function startSimulatedCall(name, avatar, color) {
+      document.getElementById('call-name').textContent = name;
+      const avatarElem = document.getElementById('call-avatar');
+      if (avatar) {
+        avatarElem.style.backgroundImage = `url('${avatar}')`;
+        avatarElem.textContent = '';
+      } else {
+        avatarElem.style.backgroundImage = '';
+        avatarElem.style.backgroundColor = color || '#3b82f6';
+        avatarElem.textContent = name[0];
+      }
+
+      document.getElementById('call-status-text').textContent = '通话中...';
+      document.getElementById('call-timer').classList.remove('hidden');
+      document.getElementById('active-call-modal').classList.remove('translate-y-full');
+
+      callSeconds = 0;
+      activeCallTimer = setInterval(() => {
+        callSeconds++;
+        const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+        const secs = String(callSeconds % 60).padStart(2, '0');
+        document.getElementById('call-timer').textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function endSimulatedCall() {
+      clearInterval(activeCallTimer);
+      document.getElementById('active-call-modal').classList.add('translate-y-full');
+    }
+
+    // NOTES APP LOGIC
+    function renderNotesList() {
+      const container = document.getElementById('notes-list');
+      container.innerHTML = '';
+
+      appData.notes.forEach(note => {
+        const card = document.createElement('div');
+        card.className = 'bg-zinc-900 border border-zinc-800 p-3 rounded-xl space-y-1';
+        card.innerHTML = `
+          <div class="flex justify-between items-center">
+            <h4 class="text-xs font-bold text-amber-400">${escapeHtml(note.title)}</h4>
+            <span class="text-[9px] text-zinc-500">${escapeHtml(note.date)}</span>
+          </div>
+          <p class="text-[11px] text-zinc-300 whitespace-pre-line">${escapeHtml(note.content)}</p>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderAllApps() {
+      renderMessagesInbox();
+      renderPhotosGrid();
+      renderCallLogs();
+      renderNotesList();
+    }
+
+    // TIMELINE SCRIPT & BRANCHING EXECUTION ENGINE
+    function startTimeline() {
+      if (isTimelineRunning) return;
+      isTimelineRunning = true;
+
+      document.getElementById('play-btn').classList.add('hidden');
+      document.getElementById('pause-btn').classList.remove('hidden');
+      document.getElementById('script-status').textContent = '剧情运行中...';
+
+      if (timelineIndex >= appData.timeline.length) resetTimeline();
+      scheduleNextTimelineStep();
+    }
+
+    function pauseTimeline() {
+      isTimelineRunning = false;
+      clearTimeout(timelineTimer);
+      document.getElementById('play-btn').classList.remove('hidden');
+      document.getElementById('pause-btn').classList.add('hidden');
+      document.getElementById('script-status').textContent = '剧情已暂停';
+    }
+
+    function resetTimeline() {
+      pauseTimeline();
+      timelineIndex = 0;
+      hideBranchingChoiceButtons();
+      document.getElementById('lock-notifications').innerHTML = '';
+      updateTimelineProgress();
+      document.getElementById('script-status').textContent = '未运行';
+    }
+
+    function scheduleNextTimelineStep() {
+      if (!isTimelineRunning || timelineIndex >= appData.timeline.length) {
+        if (timelineIndex >= appData.timeline.length) {
+          pauseTimeline();
+          document.getElementById('script-status').textContent = '剧情已结束！';
+        }
+        return;
+      }
+
+      const step = appData.timeline[timelineIndex];
+      const delayMs = (step.delay || 2.0) * 1000;
+
+      timelineTimer = setTimeout(() => {
+        executeTimelineStep(step);
+      }, delayMs);
+    }
+
+    function executeTimelineStep(step) {
+      if (step.type === 'choice') {
+        pauseTimeline();
+        document.getElementById('script-status').textContent = '等待做出分支回答...';
+        
+        openApp('messages');
+        openChatThread(step.contactId);
+        showBranchingChoiceButtons(step);
+      } else {
+        playChimeSound();
+        const contact = appData.contacts.find(c => c.id === step.contactId) || appData.contacts[0];
+
+        if (contact) {
+          contact.messages.push({ sender: 'contact', text: step.text, image: step.image, timestamp: '刚刚' });
+          contact.unread = (contact.unread || 0) + 1;
+
+          const container = document.getElementById('lock-notifications');
+          const notif = document.createElement('div');
+          notif.className = 'ios-glass rounded-2xl p-3 text-white shadow-lg border border-white/10 flex items-start space-x-3 cursor-pointer';
+          notif.onclick = () => { openApp('messages'); openChatThread(contact.id); };
+
+          let avatarContent = contact.avatar ? `<img src="${contact.avatar}" class="w-full h-full object-cover" />` : contact.name[0];
+
+          notif.innerHTML = `
+            <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white overflow-hidden shrink-0" style="background-color: ${contact.color || '#3b82f6'}">
+              ${avatarContent}
+            </div>
+            <div class="flex-1 min-w-0">
+              <h4 class="text-xs font-semibold">${escapeHtml(contact.name)}</h4>
+              <p class="text-xs text-zinc-300 truncate">${escapeHtml(step.text)}</p>
+            </div>
+          `;
+          container.prepend(notif);
+
+          renderMessagesInbox();
+          if (activeChatContactId === contact.id) renderThreadMessages(contact);
+        }
+
+        timelineIndex++;
+        updateTimelineProgress();
+        scheduleNextTimelineStep();
+      }
+    }
+
+    function updateTimelineProgress() {
+      const total = appData.timeline.length;
+      const progress = total > 0 ? (timelineIndex / total) * 100 : 0;
+      document.getElementById('script-progress').style.width = `${progress}%`;
+      document.getElementById('script-counter').textContent = `${timelineIndex} / ${total} 步`;
+    }
+
+    // STUDIO EDITOR PANELS & RENDERING
+    function switchStudioTab(tabKey) {
+      ['script', 'contacts', 'photos', 'notes', 'user'].forEach(k => {
+        document.getElementById(`panel-${k}`).classList.add('hidden');
+        const btn = document.getElementById(`stab-${k}`);
+        btn.classList.remove('text-blue-400', 'border-b-2', 'border-blue-500');
+        btn.classList.add('text-zinc-400');
+      });
+
+      document.getElementById(`panel-${tabKey}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`stab-${tabKey}`);
+      activeBtn.classList.add('text-blue-400', 'border-b-2', 'border-blue-500');
+      activeBtn.classList.remove('text-zinc-400');
+      lucide.createIcons();
+    }
+
+    function renderStudioPanels() {
+      renderStudioScriptList();
+      renderStudioContactsList();
+      renderStudioPhotosList();
+      renderStudioNotesList();
+
+      document.getElementById('user-profile-name').value = appData.user.name;
+      document.getElementById('user-profile-phone').value = appData.user.phone;
+    }
+
+    // STUDIO TIMELINE & CHOICE EDITOR
+    function renderStudioScriptList() {
+      const list = document.getElementById('timeline-steps-list');
+      list.innerHTML = '';
+
+      appData.timeline.forEach((step, idx) => {
+        const card = document.createElement('div');
+        let contactOptions = appData.contacts.map(c => `<option value="${c.id}" ${step.contactId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+
+        if (step.type === 'choice') {
+          card.className = 'glass-panel p-3.5 rounded-xl space-y-2.5 border border-purple-500/40 bg-purple-950/20 text-xs';
+          let choicesHTML = '';
+
+          (step.choices || []).forEach((opt, oIdx) => {
+            choicesHTML += `
+              <div class="bg-zinc-900/90 border border-zinc-800 p-2 rounded-lg space-y-1.5">
+                <div class="flex items-center justify-between text-[10px] text-purple-400 font-semibold">
+                  <span>选项 ${oIdx + 1}</span>
+                </div>
+                <input type="text" value="${escapeHtml(opt.label)}" onchange="updateChoiceOptionProp(${step.id}, ${oIdx}, 'label', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white text-xs" placeholder="选项文案（例如：快节奏摇滚版！）">
+                <input type="text" value="${escapeHtml(opt.reply)}" onchange="updateChoiceOptionProp(${step.id}, ${oIdx}, 'reply', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white text-xs" placeholder="角色触发的后续回复">
+              </div>
+            `;
+          });
+
+          card.innerHTML = `
+            <div class="flex justify-between items-center border-b border-purple-500/30 pb-1.5">
+              <span class="font-bold text-purple-300 flex items-center gap-1"><i data-lucide="git-merge" class="w-3.5 h-3.5"></i> 节点 #${idx + 1} [第一视角分支选项]</span>
+              <div class="flex items-center gap-2">
+                <label class="text-[10px] text-zinc-400">延迟(秒):</label>
+                <input type="number" value="${step.delay}" min="0.5" step="0.5" onchange="updateStepProp(${step.id}, 'delay', parseFloat(this.value))" class="w-12 bg-zinc-800 border border-zinc-700 text-center rounded p-1 text-white">
+                <button onclick="deleteStep(${step.id})" class="text-zinc-500 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[9px] text-zinc-400">提问对话联系人</label>
+              <select onchange="updateStepProp(${step.id}, 'contactId', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white mb-2">
+                ${contactOptions}
+              </select>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-[10px] text-purple-300 font-semibold">可选择的回答 (2~3个选项):</label>
+              ${choicesHTML}
+            </div>
+          `;
+        } else {
+          card.className = 'glass-panel p-3 rounded-xl space-y-2 border border-zinc-800 text-xs';
+          card.innerHTML = `
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-zinc-400">节点 #${idx + 1} [定时消息]</span>
+              <div class="flex items-center gap-2">
+                <label class="text-[10px] text-zinc-400">延迟(秒):</label>
+                <input type="number" value="${step.delay}" min="0.5" step="0.5" onchange="updateStepProp(${step.id}, 'delay', parseFloat(this.value))" class="w-12 bg-zinc-800 border border-zinc-700 text-center rounded p-1 text-white">
+                <button onclick="deleteStep(${step.id})" class="text-zinc-500 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[9px] text-zinc-400">发送角色</label>
+                <select onchange="updateStepProp(${step.id}, 'contactId', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white">
+                  ${contactOptions}
+                </select>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-[9px] text-zinc-400">消息文本内容</label>
+                <input type="text" value="${escapeHtml(step.text)}" onchange="updateStepProp(${step.id}, 'text', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white">
+              </div>
+            </div>
+          `;
+        }
+
+        list.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    function addTimelineStep(type) {
+      if (type === 'choice') {
+        appData.timeline.push({
+          id: Date.now(),
+          type: 'choice',
+          contactId: appData.contacts[0] ? appData.contacts[0].id : 'c1',
+          delay: 1.5,
+          choices: [
+            { id: 'opt1', label: '选择 A 选项', reply: '对应 A 选项的角色回复' },
+            { id: 'opt2', label: '选择 B 选项', reply: '对应 B 选项的角色回复' },
+            { id: 'opt3', label: '选择 C 选项', reply: '对应 C 选项的角色回复' }
+          ]
+        });
+      } else {
+        appData.timeline.push({
+          id: Date.now(),
+          type: 'msg',
+          contactId: appData.contacts[0] ? appData.contacts[0].id : 'c1',
+          delay: 2.0,
+          text: '新增剧情自动消息内容',
+          image: ''
+        });
+      }
+      renderStudioScriptList();
+      updateTimelineProgress();
+    }
+
+    function updateStepProp(id, prop, val) {
+      const step = appData.timeline.find(s => s.id === id);
+      if (step) step[prop] = val;
+    }
+
+    function updateChoiceOptionProp(stepId, optIndex, prop, val) {
+      const step = appData.timeline.find(s => s.id === stepId);
+      if (step && step.choices && step.choices[optIndex]) {
+        step.choices[optIndex][prop] = val;
+      }
+    }
+
+    function deleteStep(id) {
+      appData.timeline = appData.timeline.filter(s => s.id !== id);
+      renderStudioScriptList();
+      updateTimelineProgress();
+    }
+
+    // STUDIO CONTACTS LIST
+    function renderStudioContactsList() {
+      const list = document.getElementById('contacts-editor-list');
+      list.innerHTML = '';
+
+      appData.contacts.forEach((c, idx) => {
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-3 rounded-2xl space-y-3';
+        card.innerHTML = `
+          <div class="flex justify-between items-center border-b border-zinc-800 pb-2">
+            <h4 class="text-xs font-bold text-blue-400">角色联系人 #${idx + 1}</h4>
+            <button onclick="deleteContact('${c.id}')" class="text-zinc-500 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="block text-[10px] text-zinc-400">角色名字</label>
+              <input type="text" value="${escapeHtml(c.name)}" onchange="updateContactProp('${c.id}', 'name', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1.5 text-white">
+            </div>
+            <div>
+              <label class="block text-[10px] text-zinc-400">手机号码</label>
+              <input type="text" value="${escapeHtml(c.phone)}" onchange="updateContactProp('${c.id}', 'phone', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1.5 text-white">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-zinc-400 mb-1">头像图片文件上传</label>
+            <input type="file" accept="image/*" onchange="handleContactAvatarUpload(event, '${c.id}')" class="text-xs text-zinc-400">
+          </div>
+        `;
+        list.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    function addNewContact() {
+      const id = 'c_' + Date.now();
+      appData.contacts.push({
+        id,
+        name: '新角色',
+        phone: '+86 188-0000-0000',
+        status: '在线',
+        color: '#10b981',
+        avatar: '',
+        unread: 0,
+        messages: []
+      });
+      renderStudioContactsList();
+      renderAllApps();
+    }
+
+    function updateContactProp(id, prop, val) {
+      const c = appData.contacts.find(item => item.id === id);
+      if (c) { c[prop] = val; renderAllApps(); renderStudioScriptList(); }
+    }
+
+    function handleContactAvatarUpload(e, contactId) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const c = appData.contacts.find(item => item.id === contactId);
+        if (c) {
+          c.avatar = event.target.result;
+          renderStudioContactsList();
+          renderAllApps();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function deleteContact(id) {
+      appData.contacts = appData.contacts.filter(c => c.id !== id);
+      renderStudioContactsList();
+      renderAllApps();
+    }
+
+    // STUDIO PHOTOS LIST
+    function renderStudioPhotosList() {
+      const list = document.getElementById('photos-editor-list');
+      list.innerHTML = '';
+
+      appData.photos.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-3 rounded-xl flex items-center space-x-3 text-xs';
+        card.innerHTML = `
+          <img src="${p.url}" class="w-12 h-12 rounded object-cover shrink-0" />
+          <div class="flex-1 min-w-0 space-y-1">
+            <input type="text" value="${escapeHtml(p.date)}" onchange="updatePhotoProp('${p.id}', 'date', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white text-[10px]" placeholder="拍摄时间">
+            <input type="text" value="${escapeHtml(p.caption)}" onchange="updatePhotoProp('${p.id}', 'caption', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1 text-white text-[10px]" placeholder="照片说明">
+          </div>
+          <button onclick="deletePhoto('${p.id}')" class="text-zinc-500 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+        `;
+        list.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    function triggerPhotoUpload() { document.getElementById('photo-file-input').click(); }
+
+    function handlePhotoUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        appData.photos.push({
+          id: 'p_' + Date.now(),
+          url: event.target.result,
+          date: '2026-10-20 12:00',
+          caption: '新照片说明',
+          fav: false
+        });
+        renderStudioPhotosList();
+        renderPhotosGrid();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function updatePhotoProp(id, prop, val) {
+      const p = appData.photos.find(item => item.id === id);
+      if (p) { p[prop] = val; renderPhotosGrid(); }
+    }
+
+    function deletePhoto(id) {
+      appData.photos = appData.photos.filter(p => p.id !== id);
+      renderStudioPhotosList();
+      renderPhotosGrid();
+    }
+
+    // STUDIO NOTES LIST
+    function renderStudioNotesList() {
+      const list = document.getElementById('notes-editor-list');
+      list.innerHTML = '';
+
+      appData.notes.forEach(n => {
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-3 rounded-xl space-y-2 text-xs';
+        card.innerHTML = `
+          <div class="flex justify-between items-center">
+            <input type="text" value="${escapeHtml(n.title)}" onchange="updateNoteProp('${n.id}', 'title', this.value)" class="bg-zinc-800 border border-zinc-700 rounded p-1 text-white font-bold text-xs">
+            <button onclick="deleteNote('${n.id}')" class="text-zinc-500 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+          <textarea onchange="updateNoteProp('${n.id}', 'content', this.value)" class="w-full bg-zinc-800 border border-zinc-700 rounded p-1.5 text-white text-xs h-16">${escapeHtml(n.content)}</textarea>
+        `;
+        list.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    function addNewStudioNote() {
+      appData.notes.push({
+        id: 'n_' + Date.now(),
+        title: '新备忘录',
+        content: '在此输入备忘录详细文本...',
+        date: '2026-10-20'
+      });
+      renderStudioNotesList();
+      renderNotesList();
+    }
+
+    function updateNoteProp(id, prop, val) {
+      const n = appData.notes.find(item => item.id === id);
+      if (n) { n[prop] = val; renderNotesList(); }
+    }
+
+    function deleteNote(id) {
+      appData.notes = appData.notes.filter(n => n.id !== id);
+      renderStudioNotesList();
+      renderNotesList();
+    }
+
+    function updateUserProfile() {
+      appData.user.name = document.getElementById('user-profile-name').value;
+      appData.user.phone = document.getElementById('user-profile-phone').value;
+    }
+
+    function handleUserAvatarUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        appData.user.avatar = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // EXPORT PURE INTERACTIVE LINK
+    function saveToLocalStorage() {
+      localStorage.setItem('ios_sim_appdata', JSON.stringify(appData));
+      alert('剧情剧本已保存至本地浏览器！');
+    }
+
+    function exportToShareLink() {
+      try {
+        const jsonStr = JSON.stringify(appData);
+        const compressed = LZString.compressToEncodedURIComponent(jsonStr);
+        
+        // 生成强化的 #mode=play&data=... 纯净模式长链接
+        const pureUrl = `${window.location.origin}${window.location.pathname}#mode=play&data=${compressed}`;
+        
+        const modal = document.getElementById('export-modal');
+        const textarea = document.getElementById('export-link-textarea');
+        textarea.value = pureUrl;
+        modal.classList.remove('hidden');
+
+        // 尝试自动复制
+        navigator.clipboard.writeText(pureUrl).catch(() => {});
+      } catch (e) {
+        alert('生成失败，请重试！');
+      }
+    }
+
+    function copyExportTextarea() {
+      const textarea = document.getElementById('export-link-textarea');
+      textarea.select();
+      textarea.setSelectionRange(0, 99999);
+      try {
+        document.execCommand('copy');
+        alert('复制成功！你可以将该纯净链接发送给任何人，对方只能互动且无法修改任何设置！');
+      } catch (err) {
+        alert('已自动全选，请手动按 Ctrl+C / Cmd+C 进行复制！');
+      }
+    }
+
+    function closeExportModal() {
+      document.getElementById('export-modal').classList.add('hidden');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text || '';
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
